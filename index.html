@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPS 223 RB II</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f9;color:#172338;
+font-family:Arial,sans-serif}
+header{background:linear-gradient(120deg,#123b70,#087f8c);
+color:white;padding:26px}
+header h1{margin:0 0 8px;font-size:26px}
+main{max-width:1150px;margin:auto;padding:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+section{background:white;padding:22px;border-radius:14px;
+box-shadow:0 3px 14px #16324f10;margin-bottom:18px}
+h2{margin-top:0;font-size:20px}
+label{display:block;margin:12px 0 5px;font-size:14px}
+input,select,textarea,button{width:100%;padding:11px;
+border:1px solid #cbd5e1;border-radius:7px;font:inherit}
+textarea{resize:vertical}
+button{background:#1266b0;color:white;border:0;
+cursor:pointer;margin-top:16px;font-weight:bold}
+button:disabled{opacity:.6;cursor:wait}
+.note{color:#566579;font-size:14px}
+#message{padding:14px;border-radius:8px;margin-bottom:18px;
+white-space:pre-wrap}
+#message:empty{display:none}
+.success{background:#dcfce7;color:#14532d}
+.error{background:#fee2e2;color:#991b1b}
+.table-wrap{overflow:auto}
+table{width:100%;border-collapse:collapse;margin-top:15px}
+th,td{text-align:left;padding:12px;border-bottom:1px solid #e2e8f0}
+th{background:#eff6ff;white-space:nowrap}
+@media(max-width:750px){
+.grid{grid-template-columns:1fr}
+header{padding:22px 16px}
+main{padding:12px}
+section{padding:16px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>GPS 223 RB II</h1>
+  <div>School Management · Admissions & Class Records</div>
+</header>
+
+<main>
+<div id="message" role="status" aria-live="polite"></div>
+
+<div class="grid">
+<section>
+<h2>Student admission</h2>
+<form id="studentForm">
+<label for="admission">Admission number *</label>
+<input id="admission" required maxlength="50">
+
+<label for="studentName">Student name *</label>
+<input id="studentName" required maxlength="150">
+
+<label for="guardian">Father / guardian name *</label>
+<input id="guardian" required maxlength="150">
+
+<label for="birth">Date of birth</label>
+<input id="birth" type="date">
+
+<label for="gender">Gender</label>
+<select id="gender">
+<option value="">Select</option>
+<option value="male">Male</option>
+<option value="female">Female</option>
+<option value="other">Other</option>
+</select>
+
+<label for="phone">Guardian phone</label>
+<input id="phone" type="tel" maxlength="30">
+
+<label for="address">Address</label>
+<textarea id="address" maxlength="2000"></textarea>
+
+<label for="admissionDate">Admission date *</label>
+<input id="admissionDate" type="date" required>
+
+<button type="submit">Save student</button>
+</form>
+</section>
+
+<div>
+<section>
+<h2>Academic session</h2>
+<form id="sessionForm">
+<label for="sessionName">Session name *</label>
+<input id="sessionName" placeholder="2026-2027"
+required maxlength="30">
+
+<label for="sessionStart">Start date *</label>
+<input id="sessionStart" type="date" required>
+
+<label for="sessionEnd">End date *</label>
+<input id="sessionEnd" type="date" required>
+
+<button type="submit">Create session</button>
+</form>
+</section>
+
+<section>
+<h2>Enroll student in a class</h2>
+<p class="note">Save the student first, then select their session and class.</p>
+<form id="enrollmentForm">
+<label for="studentSelect">Student *</label>
+<select id="studentSelect" required></select>
+
+<label for="sessionSelect">Academic session *</label>
+<select id="sessionSelect" required></select>
+
+<label for="classSelect">Class *</label>
+<select id="classSelect" required></select>
+
+<label for="section">Section (optional)</label>
+<input id="section" maxlength="30">
+
+<label for="roll">Roll number (optional)</label>
+<input id="roll" maxlength="30">
+
+<button type="submit">Save enrollment</button>
+</form>
+</section>
+</div>
+</div>
+
+<section>
+<h2>Class list</h2>
+<form id="listForm">
+<div class="grid">
+<div>
+<label for="filterSession">Academic session *</label>
+<select id="filterSession" required></select>
+</div>
+<div>
+<label for="filterClass">Class</label>
+<select id="filterClass"></select>
+</div>
+</div>
+<button type="submit">View students</button>
+</form>
+<p id="count" class="note">Select a session to view records.</p>
+<div class="table-wrap">
+<table>
+<thead><tr>
+<th>Admission no.</th><th>Student</th><th>Guardian</th>
+<th>Class</th><th>Section</th><th>Roll no.</th>
+</tr></thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+</section>
+</main>
+
+<script>
+const el = id => document.getElementById(id);
+const value = id => el(id).value.trim();
+const optional = id => value(id) || null;
+
+function message(text, error = false) {
+  el("message").textContent = text;
+  el("message").className = error ? "error" : "success";
+}
+
+async function api(path, method = "GET", body) {
+  const options = {method};
+  if (body !== undefined) {
+    options.headers = {"Content-Type": "application/json"};
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(path, options);
+  const data = await response.json();
+
+  if (!response.ok) {
+    let detail = data.detail || "Request failed.";
+    if (Array.isArray(detail)) {
+      detail = detail.map(item =>
+        `${item.loc.join(".")}: ${item.msg}`
+      ).join("\n");
+    }
+    throw new Error(String(detail));
+  }
+
+  return data;
+}
+
+function fillSelect(id, items, label, placeholder) {
+  const select = el(id);
+  const previous = select.value;
+  select.replaceChildren(new Option(placeholder, ""));
+
+  for (const item of items) {
+    select.add(new Option(label(item), String(item.id)));
+  }
+
+  if (items.some(item => String(item.id) === previous)) {
+    select.value = previous;
+  }
+}
+
+async function loadStudents() {
+  const students = [];
+  let offset = 0;
+
+  while (true) {
+    const batch = await api(`/students?limit=100&offset=${offset}`);
+    students.push(...batch);
+    if (batch.length < 100) break;
+    offset += batch.length;
+  }
+
+  fillSelect(
+    "studentSelect",
+    students.filter(student => student.status === "active"),
+    student => `${student.admission_number} — ${student.full_name}`,
+    "Select student"
+  );
+}
+
+async function loadSessions() {
+  const sessions = await api("/sessions");
+  for (const id of ["sessionSelect", "filterSession"]) {
+    fillSelect(id, sessions, item => item.name, "Select session");
+  }
+}
+
+async function loadClasses() {
+  const classes = await api("/classes");
+  const label = item =>
+    item.name === "Nursery" ? "Nursery" : `Class ${item.name}`;
+
+  fillSelect("classSelect", classes, label, "Select class");
+  fillSelect("filterClass", classes, label, "All classes");
+}
+
+function wireForm(id, action) {
+  el(id).addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector("button");
+    button.disabled = true;
+    el("message").textContent = "";
+
+    try {
+      await action();
+    } catch (error) {
+      message(error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+function today() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+el("admissionDate").value = today();
+
+wireForm("studentForm", async () => {
+  const student = await api("/students", "POST", {
+    admission_number: value("admission"),
+    full_name: value("studentName"),
+    father_guardian_name: value("guardian"),
+    date_of_birth: optional("birth"),
+    gender: optional("gender"),
+    guardian_phone: optional("phone"),
+    address: optional("address"),
+    admission_date: value("admissionDate")
+  });
+
+  el("studentForm").reset();
+  el("admissionDate").value = today();
+  message(`Student saved: ${student.full_name}.`);
+
+  try {
+    await loadStudents();
+    el("studentSelect").value = String(student.id);
+  } catch {
+    message("Student saved. Refresh the page to update the student menu.");
+  }
+});
+
+wireForm("sessionForm", async () => {
+  const session = await api("/sessions", "POST", {
+    name: value("sessionName"),
+    start_date: value("sessionStart"),
+    end_date: value("sessionEnd")
+  });
+
+  el("sessionForm").reset();
+  message(`Session created: ${session.name}.`);
+
+  try {
+    await loadSessions();
+    el("sessionSelect").value = String(session.id);
+    el("filterSession").value = String(session.id);
+  } catch {
+    message("Session saved. Refresh the page to update the session menus.");
+  }
+});
+
+wireForm("enrollmentForm", async () => {
+  await api("/enrollments", "POST", {
+    student_id: Number(value("studentSelect")),
+    session_id: Number(value("sessionSelect")),
+    class_id: Number(value("classSelect")),
+    section: optional("section"),
+    roll_number: optional("roll")
+  });
+
+  message("Enrollment saved. Use View students to see the class list.");
+});
+
+wireForm("listForm", async () => {
+  const params = new URLSearchParams({
+    session_id: value("filterSession"),
+    limit: "500"
+  });
+
+  if (value("filterClass")) {
+    params.set("class_id", value("filterClass"));
+  }
+
+  const records = await api(`/enrollments?${params}`);
+  el("rows").replaceChildren();
+
+  for (const record of records) {
+    const row = document.createElement("tr");
+    const cells = [
+      record.admission_number,
+      record.full_name,
+      record.father_guardian_name,
+      record.class_name,
+      record.section,
+      record.roll_number
+    ];
+
+    for (const text of cells) {
+      const cell = document.createElement("td");
+      cell.textContent = text ?? "—";
+      row.appendChild(cell);
+    }
+    el("rows").appendChild(row);
+  }
+
+  el("count").textContent = records.length
+    ? `${records.length} student(s) displayed.`
+    : "No students enrolled for this selection.";
+});
+
+async function initialize() {
+  try {
+    await Promise.all([
+      loadStudents(), loadSessions(), loadClasses()
+    ]);
+  } catch (error) {
+    message(`Could not load menus: ${error.message}. Refresh to retry.`, true);
+  }
+}
+
+initialize();
+</script>
+</body>
+</html>
